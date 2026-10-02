@@ -1,0 +1,8 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+github-trust-policy.json
+github-actions-permissions.json
+iam_policy.json
