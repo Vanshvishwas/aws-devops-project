@@ -1,0 +1,69 @@
+name: Build and Deploy to EKS
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REGISTRY: 093807117897.dkr.ecr.ap-south-1.amazonaws.com
+  ECR_REPOSITORY: aws-devops-app
+  EKS_CLUSTER: aws-devops-eks
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-deploy:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout source code
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::093807117897:role/GitHubActions-EKS-Deploy-Role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            .
+
+      - name: Push Docker image to ECR
+        run: |
+          docker push \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Configure kubectl for EKS
+        run: |
+          aws eks update-kubeconfig \
+            --region $AWS_REGION \
+            --name $EKS_CLUSTER
+
+      - name: Deploy application to EKS
+        run: |
+          kubectl set image deployment/aws-devops-app \
+            aws-devops-app=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Wait for deployment
+        run: |
+          kubectl rollout status deployment/aws-devops-app
+
+      - name: Verify application pods
+        run: |
+          kubectl get pods
