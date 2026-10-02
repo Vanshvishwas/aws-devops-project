@@ -24,13 +24,18 @@ jobs:
     steps:
 
       - name: Checkout source code
-        uses: actions/checkout@v6
+  uses: actions/checkout@v6
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6.3.0
-        with:
-          role-to-assume: arn:aws:iam::093807117897:role/GitHubActions-EKS-Deploy-Role
-          aws-region: ${{ env.AWS_REGION }}
+- name: Debug OIDC Claims
+  uses: github/actions-oidc-debugger@main
+  with:
+    audience: sts.amazonaws.com
+
+- name: Configure AWS credentials
+  uses: aws-actions/configure-aws-credentials@v6.3.0
+  with:
+    role-to-assume: arn:aws:iam::093807117897:role/GitHubActions-EKS-Deploy-Role
+    aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
