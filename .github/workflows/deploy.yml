@@ -22,110 +22,63 @@ jobs:
 
     steps:
 
-      # --------------------------------------------------
-      # 1. Download source code from GitHub
-      # --------------------------------------------------
       - name: Checkout source code
         uses: actions/checkout@v6
 
-
-      # --------------------------------------------------
-      # 2. Checkout GitHub OIDC debugger
-      # --------------------------------------------------
       - name: Show OIDC claims
-  env:
-    AUDIENCE: sts.amazonaws.com
-  run: |
-    TOKEN_JSON=$(curl -s \
-      -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-      "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE")
+        env:
+          AUDIENCE: sts.amazonaws.com
+        run: |
+          TOKEN_JSON=$(curl -s \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE")
 
-    ID_TOKEN=$(echo "$TOKEN_JSON" | jq -r .value)
+          ID_TOKEN=$(echo "$TOKEN_JSON" | jq -r .value)
 
-    echo "$ID_TOKEN" | awk -F. '{print $2}' | base64 -d 2>/dev/null | jq -r
+          echo "$ID_TOKEN" | cut -d '.' -f2 | base64 -d 2>/dev/null | jq -r
 
-
-      # --------------------------------------------------
-      # 4. Assume AWS IAM role using GitHub OIDC
-      # --------------------------------------------------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
           role-to-assume: arn:aws:iam::093807117897:role/GitHubActions-EKS-Deploy-Role
           aws-region: ${{ env.AWS_REGION }}
 
-
-      # --------------------------------------------------
-      # 5. Verify AWS identity
-      # --------------------------------------------------
       - name: Verify AWS identity
         run: |
           aws sts get-caller-identity
 
-
-      # --------------------------------------------------
-      # 6. Login to Amazon ECR
-      # --------------------------------------------------
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-
-      # --------------------------------------------------
-      # 7. Build Docker image
-      # --------------------------------------------------
       - name: Build Docker image
         run: |
           docker build \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
 
-
-      # --------------------------------------------------
-      # 8. Push Docker image to ECR
-      # --------------------------------------------------
       - name: Push Docker image to ECR
         run: |
           docker push \
             $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-
-      # --------------------------------------------------
-      # 9. Configure kubectl for EKS
-      # --------------------------------------------------
       - name: Configure kubectl
         run: |
           aws eks update-kubeconfig \
             --region $AWS_REGION \
             --name $EKS_CLUSTER
 
-
-      # --------------------------------------------------
-      # 10. Verify EKS connection
-      # --------------------------------------------------
       - name: Verify EKS connection
         run: |
           kubectl get nodes
 
-
-      # --------------------------------------------------
-      # 11. Update Kubernetes deployment
-      # --------------------------------------------------
       - name: Deploy application to EKS
         run: |
           kubectl set image deployment/aws-devops-app \
             aws-devops-app=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-
-      # --------------------------------------------------
-      # 12. Wait for rollout
-      # --------------------------------------------------
       - name: Wait for deployment
         run: |
           kubectl rollout status deployment/aws-devops-app
 
-
-      # --------------------------------------------------
-      # 13. Verify application pods
-      # --------------------------------------------------
       - name: Verify application pods
         run: |
           kubectl get pods -o wide
