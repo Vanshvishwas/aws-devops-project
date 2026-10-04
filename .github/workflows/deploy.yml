@@ -32,22 +32,17 @@ jobs:
       # --------------------------------------------------
       # 2. Checkout GitHub OIDC debugger
       # --------------------------------------------------
-      - name: Checkout OIDC debugger
-        uses: actions/checkout@v6
-        with:
-          repository: github/actions-oidc-debugger
-          ref: main
-          path: ./.github/actions/actions-oidc-debugger
+      - name: Show OIDC claims
+  env:
+    AUDIENCE: sts.amazonaws.com
+  run: |
+    TOKEN_JSON=$(curl -s \
+      -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+      "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE")
 
+    ID_TOKEN=$(echo "$TOKEN_JSON" | jq -r .value)
 
-      # --------------------------------------------------
-      # 3. Debug GitHub OIDC token claims
-      # --------------------------------------------------
-      - name: Debug OIDC Claims
-        uses: ./.github/actions/actions-oidc-debugger
-        with:
-          audience: sts.amazonaws.com
-        continue-on-error: true
+    echo "$ID_TOKEN" | awk -F. '{print $2}' | base64 -d 2>/dev/null | jq -r
 
 
       # --------------------------------------------------
