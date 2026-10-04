@@ -22,35 +22,15 @@ jobs:
 
     steps:
 
-      # --------------------------------------------------
-      # 1. Get the application code from GitHub
-      # --------------------------------------------------
+      # 1. Checkout application code
       - name: Checkout source code
         uses: actions/checkout@v6
 
-
-      # --------------------------------------------------
-      # 2. Get and display GitHub OIDC claims
-      # --------------------------------------------------
-      - name: Show OIDC claims
-        shell: bash
-        run: |
-          TOKEN_JSON=$(curl -s \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
-
-          ID_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.value')
-
-          echo "$ID_TOKEN" | cut -d '.' -f 2 | base64 -d 2>/dev/null | jq .
-
-
-      # --------------------------------------------------
-      # 3. Directly test GitHub OIDC -> AWS STS
-      # --------------------------------------------------
+      # 2. Test GitHub OIDC -> AWS STS
       - name: Test AWS STS OIDC
         shell: bash
         run: |
-          echo "Testing GitHub OIDC authentication with AWS STS..."
+          echo "Requesting GitHub OIDC token..."
 
           TOKEN_JSON=$(curl -s \
             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
@@ -63,102 +43,69 @@ jobs:
             exit 1
           fi
 
-          if aws sts assume-role-with-web-identity \
+          echo "GitHub OIDC token received."
+          echo "Testing AWS STS AssumeRoleWithWebIdentity..."
+
+          aws sts assume-role-with-web-identity \
             --role-arn arn:aws:iam::093807117897:role/GitHubActions-EKS-Deploy-Role \
             --role-session-name github-actions-test \
             --web-identity-token "$ID_TOKEN" \
-            --duration-seconds 900 \
-            > /tmp/sts-response.json 2>&1
-          then
-            echo "SUCCESS: GitHub OIDC can assume the AWS IAM role."
-          else
-            echo "ERROR: AWS STS rejected the GitHub OIDC token."
-            cat /tmp/sts-response.json
-            exit 1
-          fi
+            --duration-seconds 900
 
+          echo "SUCCESS: GitHub OIDC can assume the AWS IAM role."
 
-      # --------------------------------------------------
-      # 4. Configure AWS credentials
-      # --------------------------------------------------
+      # 3. Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
           role-to-assume: arn:aws:iam::093807117897:role/GitHubActions-EKS-Deploy-Role
           aws-region: ${{ env.AWS_REGION }}
 
-
-      # --------------------------------------------------
-      # 5. Verify AWS identity
-      # --------------------------------------------------
+      # 4. Verify AWS identity
       - name: Verify AWS identity
         run: |
           aws sts get-caller-identity
 
-
-      # --------------------------------------------------
-      # 6. Login to Amazon ECR
-      # --------------------------------------------------
+      # 5. Login to Amazon ECR
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-
-      # --------------------------------------------------
-      # 7. Build Docker image
-      # --------------------------------------------------
+      # 6. Build Docker image
       - name: Build Docker image
         run: |
           docker build \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
 
-
-      # --------------------------------------------------
-      # 8. Push Docker image to ECR
-      # --------------------------------------------------
+      # 7. Push Docker image to ECR
       - name: Push Docker image to ECR
         run: |
           docker push \
             $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-
-      # --------------------------------------------------
-      # 9. Configure kubectl for EKS
-      # --------------------------------------------------
+      # 8. Configure kubectl for EKS
       - name: Configure kubectl
         run: |
           aws eks update-kubeconfig \
             --region $AWS_REGION \
             --name $EKS_CLUSTER
 
-
-      # --------------------------------------------------
-      # 10. Verify EKS connection
-      # --------------------------------------------------
+      # 9. Verify EKS connection
       - name: Verify EKS connection
         run: |
           kubectl get nodes
 
-
-      # --------------------------------------------------
-      # 11. Deploy new image to Kubernetes
-      # --------------------------------------------------
+      # 10. Deploy application to EKS
       - name: Deploy application to EKS
         run: |
           kubectl set image deployment/aws-devops-app \
             aws-devops-app=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-
-      # --------------------------------------------------
-      # 12. Wait for Kubernetes deployment
-      # --------------------------------------------------
+      # 11. Wait for deployment
       - name: Wait for deployment
         run: |
           kubectl rollout status deployment/aws-devops-app
 
-
-      # --------------------------------------------------
-      # 13. Verify application pods
-      # --------------------------------------------------
+      # 12. Verify application pods
       - name: Verify application pods
         run: |
           kubectl get pods -o wide
