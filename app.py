@@ -7,7 +7,7 @@ app = Flask(__name__)
 def home():
     return f"""
     <h1>AWS DevOps Demo</h1>
-    <p>Application: Container Demo</p>
+    <p>Application: Container Anil</p>
     <p>Version: 2.0</p>
     <p>Environment: Development</p>
     <p>Hostname: {socket.gethostname()}</p>
