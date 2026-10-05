@@ -92,8 +92,8 @@ jobs:
       # 9. Verify EKS connection
       - name: Verify EKS connection
         run: |
-          kubectl get nodes
-
+          kubectl get pods -n default
+          
       # 10. Deploy application to EKS
       - name: Deploy application to EKS
         run: |
